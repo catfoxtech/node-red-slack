@@ -461,6 +461,8 @@ module.exports = function(RED) {
         // do lockup by member name
         var member = this.findMemberByName(name);
         if (member) {
+          directChannel = member;
+          // use ID of channel if conversation already open
           for (var id in this.state.channels) {
             if (this.state.channels.hasOwnProperty(id)) {
               if (
@@ -1254,15 +1256,25 @@ module.exports = function(RED) {
          * https://api.slack.com/methods/chat.postMessage
          */
         if (
-          method == "chat.postMessage" ||
-          method == "chat.postEphemeral" ||
-          method == "chat.meMessage"
+          method === 'chat.postMessage' ||
+          method === 'chat.postEphemeral' ||
+          method === 'chat.meMessage' ||
+          method === 'files.upload'
         ) {
-          if (options.channel[0] == "@" || options.channel[0] == "#") {
-            var channel = node.clientNode.findChannelByName(options.channel);
-            if (channel && channel.id) {
-              options.channel = channel.id;
+          const channels = (options.channels || options.channel).split(/\s*,\s*/).map(function(channel){
+            if (channel[0] === "@" || channel[0] === "#") {
+              channel = node.clientNode.findChannelByName(channel);
+              if (channel && channel.id) {
+                return channel.id;
+              }
             }
+          }).filter(Boolean);
+          if (channels.length) {
+            options[options.channels ? 'channels' : 'channel'] = channels.join(',');
+          }
+          else {
+            node.error("invalid channel: " + (options.channels || options.channel));
+            return null;
           }
         }
 
@@ -1292,6 +1304,10 @@ module.exports = function(RED) {
           case "chat.meMessage":
             // force text to be a string
             options.text = ValueToString(options.text);
+            break;
+          case 'files.upload':
+            // force text to be a string
+            options.initial_comment = ValueToString(options.initial_comment);
             break;
         }
 
